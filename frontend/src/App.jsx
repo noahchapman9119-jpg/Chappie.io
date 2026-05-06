@@ -39,7 +39,7 @@ const spinnerStyles = `
 
 export default function App() {
   const [file, setFile] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [transcript, setTranscript] = useState("");
   const [soapNote, setSoapNote] = useState(emptySoap);
@@ -52,7 +52,7 @@ export default function App() {
       return;
     }
 
-    setLoading(true);
+    setIsLoading(true);
     setError("");
 
     try {
@@ -63,7 +63,7 @@ export default function App() {
     } catch (err) {
       setError(err.message || "Something went wrong.");
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -85,15 +85,15 @@ export default function App() {
           type="file"
           accept="audio/*"
           onChange={(e) => setFile(e.target.files?.[0] || null)}
-          disabled={loading}
+          disabled={isLoading}
         />
-        <button type="submit" disabled={loading}>
-          {loading ? "Processing..." : "Upload audio and generate SOAP"}
+        <button type="submit" disabled={isLoading}>
+          {isLoading ? "Processing..." : "Upload audio and generate SOAP"}
         </button>
-        {loading && (
+        {isLoading && (
           <div aria-live="polite" className="upload-loading-message" role="status">
             <span className="loading-spinner" aria-hidden="true" />
-            <span>Uploading and processing your audio. Generating the SOAP note may take a moment.</span>
+            <span>Processing audio...</span>
           </div>
         )}
       </form>
