@@ -8,6 +8,24 @@ const emptySoap = {
   plan: "",
 };
 
+const spinnerStyles = `
+  @keyframes chappie-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .loading-spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 0.25rem solid #d7e3f4;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: chappie-spin 0.8s linear infinite;
+    flex: 0 0 auto;
+  }
+`;
+
 export default function App() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -44,6 +62,7 @@ export default function App() {
 
   return (
     <main style={{ fontFamily: "sans-serif", maxWidth: 900, margin: "2rem auto", padding: "0 1rem" }}>
+      <style>{spinnerStyles}</style>
       <h1>AI SOAP Note Copilot (MVP Demo)</h1>
       <p>
         Demo/prototype only. Do not upload real patient data. All AI-generated documentation must be reviewed by a
@@ -59,6 +78,25 @@ export default function App() {
         <button type="submit" disabled={loading}>
           {loading ? "Processing..." : "Upload audio and generate SOAP"}
         </button>
+        {loading && (
+          <div
+            aria-live="polite"
+            role="status"
+            style={{
+              alignItems: "center",
+              background: "#eff6ff",
+              border: "1px solid #bfdbfe",
+              borderRadius: "0.5rem",
+              color: "#1e3a8a",
+              display: "flex",
+              gap: "0.75rem",
+              padding: "0.85rem 1rem",
+            }}
+          >
+            <span className="loading-spinner" aria-hidden="true" />
+            <span>Processing audio and generating your SOAP note. This may take a moment.</span>
+          </div>
+        )}
       </form>
 
       {error && <p style={{ color: "crimson" }}>{error}</p>}
