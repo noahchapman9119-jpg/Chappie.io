@@ -24,6 +24,17 @@ const spinnerStyles = `
     animation: chappie-spin 0.8s linear infinite;
     flex: 0 0 auto;
   }
+
+  .upload-loading-message {
+    align-items: center;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 0.5rem;
+    color: #1e3a8a;
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+  }
 `;
 
 export default function App() {
@@ -74,27 +85,15 @@ export default function App() {
           type="file"
           accept="audio/*"
           onChange={(e) => setFile(e.target.files?.[0] || null)}
+          disabled={loading}
         />
         <button type="submit" disabled={loading}>
           {loading ? "Processing..." : "Upload audio and generate SOAP"}
         </button>
         {loading && (
-          <div
-            aria-live="polite"
-            role="status"
-            style={{
-              alignItems: "center",
-              background: "#eff6ff",
-              border: "1px solid #bfdbfe",
-              borderRadius: "0.5rem",
-              color: "#1e3a8a",
-              display: "flex",
-              gap: "0.75rem",
-              padding: "0.85rem 1rem",
-            }}
-          >
+          <div aria-live="polite" className="upload-loading-message" role="status">
             <span className="loading-spinner" aria-hidden="true" />
-            <span>Processing audio and generating your SOAP note. This may take a moment.</span>
+            <span>Uploading and processing your audio. Generating the SOAP note may take a moment.</span>
           </div>
         )}
       </form>
