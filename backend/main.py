@@ -1,8 +1,7 @@
 import json
 import os
 import tempfile
-from typing import Any, Dict
-from fastapi.middleware.cors import CORSMiddleware
+from typing import Dict
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -17,7 +16,7 @@ app = FastAPI(title="AI SOAP Note Copilot MVP")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -48,6 +47,18 @@ def health() -> Dict[str, str]:
     return {"status": "ok"}
 
 
+def _safe_string(value) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        return "\n".join(str(item) for item in value)
+    if isinstance(value, dict):
+        return "\n".join(f"{k}: {v}" for k, v in value.items())
+    if value is None:
+        return ""
+    return str(value)
+
+
 @app.post("/process-audio", response_model=ProcessResponse)
 async def process_audio(file: UploadFile = File(...)) -> ProcessResponse:
     try:
@@ -57,8 +68,10 @@ async def process_audio(file: UploadFile = File(...)) -> ProcessResponse:
         client = _get_openai_client()
 
         suffix = os.path.splitext(file.filename)[1] or ".wav"
+
         with tempfile.NamedTemporaryFile(delete=True, suffix=suffix) as temp_audio:
             content = await file.read()
+
             if not content:
                 raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
@@ -72,41 +85,40 @@ async def process_audio(file: UploadFile = File(...)) -> ProcessResponse:
                 )
 
         transcript_text = getattr(transcription, "text", "").strip()
+
         if not transcript_text:
             raise HTTPException(status_code=500, detail="Transcription failed.")
-
-        schema: Dict[str, Any] = {
-            "name": "soap_note",
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "subjective": {"type": "string"},
-                    "objective": {"type": "string"},
-                    "assessment": {"type": "string"},
-                    "plan": {"type": "string"},
-                },
-                "required": ["subjective", "objective", "assessment", "plan"],
-                "additionalProperties": False,
-            },
-            "strict": True,
-        }
 
         soap_completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a clinical documentation assistant. Return a SOAP note as JSON with keys: subjective, objective, assessment, plan."
+                    "content": (
+                        "You are a clinical documentation assistant. "
+                        "Return ONLY valid JSON. "
+                        "The JSON must have exactly these keys: "
+                        "subjective, objective, assessment, plan. "
+                        "Each value must be a plain string, not an object and not an array."
+                    ),
                 },
                 {
                     "role": "user",
-                    "content": f"Create a SOAP note from this transcript:\n\n{transcript_text}"
-                }
+                    "content": f"Create a SOAP note from this transcript:\n\n{transcript_text}",
+                },
             ],
             response_format={"type": "json_object"},
         )
 
-        soap_data = json.loads(soap_completion.choices[0].message.content)
+        raw_content = soap_completion.choices[0].message.content or "{}"
+        soap_data = json.loads(raw_content)
+
+        clean_soap = {
+            "subjective": _safe_string(soap_data.get("subjective")),
+            "objective": _safe_string(soap_data.get("objective")),
+            "assessment": _safe_string(soap_data.get("assessment")),
+            "plan": _safe_string(soap_data.get("plan")),
+        }
 
         disclaimer = (
             "Demo/prototype only. Do not store patient data in this app. "
@@ -115,10 +127,15 @@ async def process_audio(file: UploadFile = File(...)) -> ProcessResponse:
 
         return ProcessResponse(
             transcript=transcript_text,
-            soap_note=SoapNote(**soap_data),
+            soap_note=SoapNote(**clean_soap),
             disclaimer=disclaimer,
         )
+
+    except HTTPException:
+        raise
+
     except Exception as e:
         import traceback
+
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
