@@ -59,7 +59,7 @@ Edit `.env` and set:
 - `OPENAI_API_KEY`
 
 If needed, adjust frontend API target:
-- `VITE_API_URL` (default `http://localhost:8000`)
+- `VITE_API_URL` (default `"https://chappieio-production.up.railway.app"`)
 
 ### 2) Run backend (FastAPI)
 
