@@ -91,27 +91,22 @@ async def process_audio(file: UploadFile = File(...)) -> ProcessResponse:
             "strict": True,
         }
 
-        completion = client.responses.create(
-            model="gpt-4.1-mini",
-            input=[
+        soap_completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
                 {
                     "role": "system",
-                    "content": "You are a clinical documentation assistant for demo purposes. Output concise SOAP note fields based strictly on the transcript. If information is missing, state 'Not provided.'",
+                    "content": "You are a clinical documentation assistant. Return a SOAP note as JSON with keys: subjective, objective, assessment, plan."
                 },
                 {
                     "role": "user",
-                    "content": f"Convert this transcript into SOAP note JSON:\n\n{transcript_text}",
-                },
+                    "content": f"Create a SOAP note from this transcript:\n\n{transcript_text}"
+                }
             ],
-            text={"format": {"type": "json_schema", "name": schema["name"], "schema": schema["schema"], "strict": True}},
+            response_format={"type": "json_object"},
         )
 
-        raw_json = completion.output_text
-
-        try:
-            soap_data = json.loads(raw_json)
-        except json.JSONDecodeError as exc:
-            raise HTTPException(status_code=500, detail="Invalid JSON returned by model.") from exc
+        soap_data = json.loads(soap_completion.choices[0].message.content)
 
         disclaimer = (
             "Demo/prototype only. Do not store patient data in this app. "
@@ -126,4 +121,4 @@ async def process_audio(file: UploadFile = File(...)) -> ProcessResponse:
     except Exception as e:
         import traceback
         print(traceback.format_exc())
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
