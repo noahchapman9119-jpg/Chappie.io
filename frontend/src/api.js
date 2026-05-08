@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "chappieio.railway.internal";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "chappieio-production.up.railway.app";
 
 export async function processAudio(file) {
   const formData = new FormData();
