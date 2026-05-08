@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import tempfile
 from typing import Dict
@@ -10,6 +11,11 @@ from openai import OpenAI
 from pydantic import BaseModel
 
 load_dotenv()
+
+logger = logging.getLogger("chappie")
+
+MAX_AUDIO_FILE_SIZE = 25 * 1024 * 1024
+AUDIO_EXTENSIONS = {".aac", ".aiff", ".flac", ".m4a", ".mp3", ".mp4", ".ogg", ".opus", ".wav", ".webm"}
 
 app = FastAPI(title="AI SOAP Note Copilot MVP")
 
@@ -38,7 +44,11 @@ class ProcessResponse(BaseModel):
 def _get_openai_client() -> OpenAI:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not configured.")
+        logger.error("OPENAI_API_KEY is not configured.")
+        raise HTTPException(
+            status_code=500,
+            detail="Audio processing is not configured yet. Please try again later.",
+        )
     return OpenAI(api_key=api_key)
 
 
@@ -59,21 +69,32 @@ def _safe_string(value) -> str:
     return str(value)
 
 
+def _is_audio_upload(file: UploadFile) -> bool:
+    suffix = os.path.splitext(file.filename or "")[1].lower()
+    content_type = (file.content_type or "").lower()
+    return content_type.startswith("audio/") or suffix in AUDIO_EXTENSIONS
+
+
 @app.post("/process-audio", response_model=ProcessResponse)
 async def process_audio(file: UploadFile = File(...)) -> ProcessResponse:
     try:
         if not file.filename:
-            raise HTTPException(status_code=400, detail="Missing file name.")
+            raise HTTPException(status_code=400, detail="Please upload an audio file before generating a SOAP note.")
+
+        if not _is_audio_upload(file):
+            raise HTTPException(status_code=400, detail="Please upload an audio file, such as MP3, WAV, M4A, OGG, or WebM.")
 
         client = _get_openai_client()
-
         suffix = os.path.splitext(file.filename)[1] or ".wav"
 
         with tempfile.NamedTemporaryFile(delete=True, suffix=suffix) as temp_audio:
             content = await file.read()
 
             if not content:
-                raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+                raise HTTPException(status_code=400, detail="The uploaded audio file appears to be empty.")
+
+            if len(content) > MAX_AUDIO_FILE_SIZE:
+                raise HTTPException(status_code=413, detail="That audio file is too large for this demo. Please upload a file under 25 MB.")
 
             temp_audio.write(content)
             temp_audio.flush()
@@ -87,7 +108,7 @@ async def process_audio(file: UploadFile = File(...)) -> ProcessResponse:
         transcript_text = getattr(transcription, "text", "").strip()
 
         if not transcript_text:
-            raise HTTPException(status_code=500, detail="Transcription failed.")
+            raise HTTPException(status_code=500, detail="We could not transcribe the audio. Please try again with clearer audio.")
 
         soap_completion = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -95,11 +116,12 @@ async def process_audio(file: UploadFile = File(...)) -> ProcessResponse:
                 {
                     "role": "system",
                     "content": (
-                        "You are a clinical documentation assistant. "
+                        "You are a clinical documentation assistant for a demo/prototype. "
                         "Return ONLY valid JSON. "
                         "The JSON must have exactly these keys: "
                         "subjective, objective, assessment, plan. "
-                        "Each value must be a plain string, not an object and not an array."
+                        "Each value must be a plain string, not an object and not an array. "
+                        "Do not make compliance claims. Remind that clinician review is required when clinically relevant."
                     ),
                 },
                 {
@@ -133,9 +155,9 @@ async def process_audio(file: UploadFile = File(...)) -> ProcessResponse:
 
     except HTTPException:
         raise
-
-    except Exception as e:
-        import traceback
-
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Unhandled /process-audio failure")
+        raise HTTPException(
+            status_code=500,
+            detail="We could not process the audio right now. Please try again with a shorter or clearer audio file.",
+        )
