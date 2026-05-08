@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 from typing import Any, Dict
-from fastapi.middlewar.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
